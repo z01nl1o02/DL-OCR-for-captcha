@@ -1,7 +1,7 @@
 import os,sys,pdb
 import numpy as np
 
-root = 'data/gen'
+root = 'data/qq'
 
 def run(inroot,relpath):
     lines = []

@@ -58,8 +58,11 @@ class CAPTCHAIter(mx.io.DataIter):
         else:
             label = '0000'
         img = cv2.imread(path,1) 
+        img = cv2.resize(img,(self.width, self.height)) #################
+        #pdb.set_trace()
         #cv2.imshow('src',img)
         #pdb.set_trace()
+       # print img.shape,'->',
         if self.dataAug:
             da = DATA_AUGMENT()
             img = da.gaussian(img)
@@ -73,7 +76,7 @@ class CAPTCHAIter(mx.io.DataIter):
                 y0 = cy - self.height/2
                 y1 = y0 + self.height
                 img = img[y0:y1,x0:x1,:]
-        
+       # print img.shape
         #cv2.imshow('new',img)
         #cv2.waitKey(200)
         #pdb.set_trace()
@@ -85,6 +88,7 @@ class CAPTCHAIter(mx.io.DataIter):
         img[:,:,1] = (img[:,:,1] - greenM) / greenS
         img[:,:,2] = (img[:,:,2] - redM) / redS
         img = np.transpose(img, (2,0,1)) ###### transpose
+       # print img.shape
         return img,label
                 
     def __init__(self, root, sampleFile,batch_size, labels, width, height, shuffle = False,dataAug = False, initMeanStd=False):
@@ -121,8 +125,14 @@ class CAPTCHAIter(mx.io.DataIter):
                 X,Y = self.get_sample(i + k * self.batch_size)
                 data.append(X)
                 label.append(Y)
-
-            data_all = [mx.nd.array(data)]
+            #pdb.set_trace()
+            C,H,W = data[0].shape
+            N = len(data)
+            data_all = np.zeros( (N,C,H,W)  )
+            for k in range(N):
+                data_all[k,:,:,:] = data[k]
+            data_all = [data_all]
+           # data_all = [mx.nd.array(d) for d in data]
             label_all = [mx.nd.array(label)]
             data_names = ['data']
             label_names = ['softmax_label']

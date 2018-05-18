@@ -101,7 +101,7 @@ def accuracy(output, label):
 
 def _get_batch(batch, ctx):
     """return data and label on ctx"""
-    
+    #pdb.set_trace()
     if isinstance(batch, mx.io.DataBatch):
         data = batch.data[0]
         label = batch.label[0]
@@ -143,6 +143,7 @@ def evaluate_accuracy(data_iterator, net, lossfunc, ctx=[mx.cpu()]):
             #n += y.size
             n += X.shape[0]
         acc.wait_to_read() # don't push too many operators into backend
+    #pdb.set_trace()
     return acc.asscalar() / n, np.asarray(loss_list).mean()
 
 def save_checkpoints(cpdir,net, trainer,epoch):
@@ -181,6 +182,7 @@ def train(train_data, test_data, net, loss, trainer, ctx, num_epochs, lr_steps,p
             #batch_size = batch.shape[0]
             losses = []
             with autograd.record():
+                #pdb.set_trace()
                 outputs = [net(X) for X in data]
                 #pdb.set_trace()
                 for k, yhat in enumerate(outputs[0]):

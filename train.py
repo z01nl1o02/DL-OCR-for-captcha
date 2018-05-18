@@ -12,22 +12,22 @@ import logging
 from importlib import import_module
 from captcha_data_iter import CAPTCHAIter
 
-pretrained="model/Biter-052688.params"
+pretrained=""
 
-dataroot = 'data/gen'
-labels = list('0123456789ABCDEFGHJKLMNPQRSTUVWXYZ')
+dataroot = 'data/qq'
+labels = list('abcdefghijklmnopqrstuvwxyz')
 outputNum = len(labels)
 trainBatchSize = 50
 testBatchSize = 50
-width = 120
-height = 32
+width = 168
+height = 64
 ctx = mx.gpu()
 
    
 logging.basicConfig(format='%(asctime)s %(message)s', filemode='w',datefmt='%m/%d/%Y %I:%M:%S %p',filename="train.log", level=logging.INFO)
 
 
-mod = import_module('symbols.captcha_net')
+mod = import_module('symbols.captcha_conv_net')
 net = mod.get_symbol(outputNum, ctx)
 
 
@@ -39,15 +39,18 @@ if pretrained is not None and pretrained != "":
 
 trainIter = CAPTCHAIter(dataroot,os.path.join(dataroot,'train/samples.txt'), trainBatchSize,labels, width, height, shuffle=True, dataAug = True, initMeanStd = True)
 testIter = CAPTCHAIter(dataroot,os.path.join(dataroot,'test/samples.txt'), testBatchSize, labels, width, height)
-#for batch in testIter:
-#    data,label = batch.data, batch.label
-#    print data[0].shape, label[0].shape
+for batch in testIter:
+    data,label = batch.data, batch.label
+    print data[0].shape, label[0].shape
+    break 
 
+    
 loss = gluon.loss.SoftmaxCrossEntropyLoss(sparse_label = True, axis=1)    
-trainer = gluon.Trainer(net.collect_params(),"sgd",{'learning_rate':0.01,'wd':0.00005})
+trainer = gluon.Trainer(net.collect_params(),"adam",{'learning_rate':0.001,'wd':0.00005})
     
     
-lr_steps = [k * 100 for k in [500, 2000, 3000, 4000]]
+#lr_steps = [k * 100 for k in [500, 2000, 3000, 4000]]
+lr_steps = [10000000]
 utils.train(trainIter, testIter, net, loss, trainer, ctx, lr_steps[-1] + 1000, lr_steps, print_batches = 200, cpdir = "model")
     
     

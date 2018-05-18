@@ -1,6 +1,7 @@
 import os,sys,pdb
 import numpy as np
 import cv2
+import random
 
 class DATA_AUGMENT(object):
     def __init__(self):

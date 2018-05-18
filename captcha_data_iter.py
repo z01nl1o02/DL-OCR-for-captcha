@@ -3,6 +3,7 @@ import numpy as np
 import mxnet as mx
 import cv2
 from data_augment import DATA_AUGMENT
+import random
 
 class CAPTCHABatch(mx.io.DataBatch):
     def __init__(self, data_names, data, label_names, label):

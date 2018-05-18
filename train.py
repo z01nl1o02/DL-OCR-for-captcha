@@ -12,7 +12,7 @@ import logging
 from importlib import import_module
 from captcha_data_iter import CAPTCHAIter
 
-pretrained="model/Aiter-072624.params"
+pretrained="model/Biter-052688.params"
 
 dataroot = 'data/gen'
 labels = list('0123456789ABCDEFGHJKLMNPQRSTUVWXYZ')
@@ -36,9 +36,9 @@ if pretrained is not None and pretrained != "":
     net.load_params(pretrained,ctx=utils.try_gpu())
     logging.info("load model:%s"%pretrained)
 
-testIter = CAPTCHAIter(dataroot,os.path.join(dataroot,'test/samples.txt'), testBatchSize, labels, width, height)
-trainIter = CAPTCHAIter(dataroot,os.path.join(dataroot,'train/samples.txt'), trainBatchSize,labels, width, height, shuffle=True, dataAug = True, initMeanStd = True)
 
+trainIter = CAPTCHAIter(dataroot,os.path.join(dataroot,'train/samples.txt'), trainBatchSize,labels, width, height, shuffle=True, dataAug = True, initMeanStd = True)
+testIter = CAPTCHAIter(dataroot,os.path.join(dataroot,'test/samples.txt'), testBatchSize, labels, width, height)
 #for batch in testIter:
 #    data,label = batch.data, batch.label
 #    print data[0].shape, label[0].shape
@@ -47,7 +47,7 @@ loss = gluon.loss.SoftmaxCrossEntropyLoss(sparse_label = True, axis=1)
 trainer = gluon.Trainer(net.collect_params(),"sgd",{'learning_rate':0.01,'wd':0.00005})
     
     
-lr_steps = [k * 100 for k in [1000, 2000, 3000, 4000]]
+lr_steps = [k * 100 for k in [500, 2000, 3000, 4000]]
 utils.train(trainIter, testIter, net, loss, trainer, ctx, lr_steps[-1] + 1000, lr_steps, print_batches = 200, cpdir = "model")
     
     

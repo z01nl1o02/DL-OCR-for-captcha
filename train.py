@@ -27,7 +27,7 @@ ctx = mx.gpu()
 logging.basicConfig(format='%(asctime)s %(message)s', filemode='w',datefmt='%m/%d/%Y %I:%M:%S %p',filename="train.log", level=logging.INFO)
 
 
-mod = import_module('symbols.captcha_conv_net')
+mod = import_module('symbols.captcha_resnet')
 net = mod.get_symbol(outputNum, ctx)
 
 

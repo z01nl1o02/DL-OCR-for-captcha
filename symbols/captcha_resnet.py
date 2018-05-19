@@ -108,11 +108,11 @@ class ResNet(nn.HybridBlock):
             else:
                 self.classifier=None
 
-            self.netout = nn.Sequential()
-            self.netout.add(nn.Dense(outputNum))
-            self.netout.add(nn.Dense(outputNum))
-            self.netout.add(nn.Dense(outputNum))
-            self.netout.add(nn.Dense(outputNum))
+            self.netout = nn.HybridSequential()
+            self.netout.add(nn.Dense(num_classes))
+            self.netout.add(nn.Dense(num_classes))
+            self.netout.add(nn.Dense(num_classes))
+            self.netout.add(nn.Dense(num_classes))
 
     def hybrid_forward(self, F, x):
         bodyout = self.features(x)

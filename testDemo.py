@@ -14,20 +14,20 @@ from data_augment import DATA_AUGMENT
 from importlib import import_module
 import glob
 
-pretrained="model/Aiter-072624.params"
+pretrained="model/weights.params"
 
-dataroot = '../DL-OCR-for-captcha/data/gen/test' #has test subdir
-labels = list('0123456789ABCDEFGHJKLMNPQRSTUVWXYZ')
+dataroot = 'data/test' #has test subdir
+labels = list('abcdefghijklmnopqrstuvwxyz')
 outputNum = len(labels)
-testBatchSize = 50
-width = 120
-height = 32
+testBatchSize = 1
+width = 168
+height = 64
 ctx = mx.cpu()
 
 
 
 
-mod = import_module('symbols.captcha_net')
+mod = import_module('symbols.captcha_resnet')
 net = mod.get_symbol(outputNum, ctx)
 net.load_params(pretrained,ctx=ctx)
 

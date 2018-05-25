@@ -16,13 +16,13 @@ import glob
 
 pretrained="model/weights.params"
 
-dataroot = 'data/test' #has test subdir
+dataroot = 'data/qq/test' #has test subdir
 labels = list('abcdefghijklmnopqrstuvwxyz')
 outputNum = len(labels)
 testBatchSize = 1
 width = 168
 height = 64
-ctx = mx.cpu()
+ctx = mx.gpu()
 
 
 
@@ -37,7 +37,7 @@ lossFunc = gluon.loss.SoftmaxCrossEntropyLoss(sparse_label = True, axis=1)
 
 for jpg in glob.glob( os.path.join(dataroot,'*.jpg') ):
     img,label = testIter.get_sample(0, jpg)
-    X = nd.array( np.expand_dims(img,0) )
+    X = nd.array( np.expand_dims(img,0) ).as_in_context(ctx)
     Y = net(X)
     chars = [ labels[np.uint64(y.argmax(axis=1).asnumpy()[0])] for y in Y]
     print chars

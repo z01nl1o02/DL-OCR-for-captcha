@@ -4,7 +4,7 @@
 """
 source: https://github.com/ZhichengHuang/MxNet_BoT
 """
-
+import mxnet as mx
 from mxnet.gluon import nn
 
 
@@ -122,7 +122,7 @@ class ResNet(nn.HybridBlock):
         for i,layer in enumerate(self.netout):
             tmp =  layer(bodyout) 
             out.append(tmp)
-        return out
+        return mx.nd.concat(*out,dim=1)
 
 
 
@@ -138,7 +138,7 @@ class ResNet(nn.HybridBlock):
 
 
 def get_symbol(num_classes,ctx,pretrained=False,verbose=False,**kwargs):
-    net = ResNet(Bottleneck,[3,4,6,3],last_pool=True,
+    net = ResNet(Bottleneck,[2,2,2,2],last_pool=True,
                    num_classes=num_classes,verbose=verbose,**kwargs)
-    net.initialize(ctx = ctx)
+    net.initialize(ctx = ctx,init=mx.init.Xavier())
     return net

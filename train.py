@@ -10,24 +10,18 @@ from mxnet.gluon import nn
 import utils
 import logging
 from importlib import import_module
-from captcha_data_iter import CAPTCHAIter
+from captcha_data_iter import train_dataset, test_dataset
+import datetime
 
-pretrained="model/Biter-052688.params"
 
-dataroot = 'data/gen'
-labels = list('0123456789ABCDEFGHJKLMNPQRSTUVWXYZ')
-outputNum = len(labels)
-trainBatchSize = 50
-testBatchSize = 50
-width = 120
-height = 32
+pretrained=""#"models/epoch_{:0>8d}.params".format(19)
+
+batch_size = 32
+outputNum = 26
 ctx = mx.gpu()
 
-   
-logging.basicConfig(format='%(asctime)s %(message)s', filemode='w',datefmt='%m/%d/%Y %I:%M:%S %p',filename="train.log", level=logging.INFO)
 
-
-mod = import_module('symbols.captcha_net')
+mod = import_module('symbols.captcha_resnet')
 net = mod.get_symbol(outputNum, ctx)
 
 
@@ -36,20 +30,16 @@ if pretrained is not None and pretrained != "":
     net.load_params(pretrained,ctx=utils.try_gpu())
     logging.info("load model:%s"%pretrained)
 
+train_iter = gluon.data.DataLoader(train_dataset,batch_size, shuffle=True,last_batch="rollover")
+test_iter = gluon.data.DataLoader(test_dataset,batch_size, shuffle=False,last_batch="rollover")
 
-trainIter = CAPTCHAIter(dataroot,os.path.join(dataroot,'train/samples.txt'), trainBatchSize,labels, width, height, shuffle=True, dataAug = True, initMeanStd = True)
-testIter = CAPTCHAIter(dataroot,os.path.join(dataroot,'test/samples.txt'), testBatchSize, labels, width, height)
-#for batch in testIter:
-#    data,label = batch.data, batch.label
-#    print data[0].shape, label[0].shape
 
+base_lr = 0.001
+max_epoch = 100
+max_update = max_epoch * len(train_dataset) / batch_size
 loss = gluon.loss.SoftmaxCrossEntropyLoss(sparse_label = True, axis=1)    
-trainer = gluon.Trainer(net.collect_params(),"sgd",{'learning_rate':0.01,'wd':0.00005})
+trainer = gluon.Trainer(net.collect_params(),"adam",{'learning_rate':base_lr,'wd':0.0005})
+lr_sch = mx.lr_scheduler.PolyScheduler(max_update,base_lr=base_lr,pwr=1)
     
+utils.train(train_iter, test_iter, net, loss, trainer, ctx, max_epoch, len(train_dataset)//batch_size//10, lr_sch)
     
-lr_steps = [k * 100 for k in [500, 2000, 3000, 4000]]
-utils.train(trainIter, testIter, net, loss, trainer, ctx, lr_steps[-1] + 1000, lr_steps, print_batches = 200, cpdir = "model")
-    
-    
-    
-        

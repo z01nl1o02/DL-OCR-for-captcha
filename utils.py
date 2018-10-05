@@ -101,7 +101,7 @@ def accuracy(output, label):
 
 def _get_batch(batch, ctx):
     """return data and label on ctx"""
-    
+    #pdb.set_trace()
     if isinstance(batch, mx.io.DataBatch):
         data = batch.data[0]
         label = batch.label[0]
@@ -111,117 +111,106 @@ def _get_batch(batch, ctx):
             gluon.utils.split_and_load(label, ctx),
             data.shape[0])
 
-def evaluate_accuracy(data_iterator, net, lossfunc, ctx=[mx.cpu()]):
-    if isinstance(ctx, mx.Context):
-        ctx = [ctx]
-    acc = nd.array([0])
-    loss_list = []
-    n = 0.
-    if isinstance(data_iterator, mx.io.MXDataIter) or isinstance(data_iterator,mx.image.ImageIter):
-        data_iterator.reset()
-    for batch in data_iterator:
-        data, label, batch_size = _get_batch(batch, ctx)
-        for X, y in zip(data, label):
-            
-            y = y.astype('float32').copyto(mx.cpu())
-           #pdb.set_trace()
-            ypred = net(X)
-            tmpacc = 0
-            for k, yhat in enumerate(ypred):
-                tmpacc += (yhat.argmax(axis=1) == label[0][:,k]).sum()
-            losses = []
-            for k, yhat in enumerate(ypred):
-                losses.append( lossfunc( yhat, label[0][:,k] ) )
-            #pdb.set_trace()
-            losses = [ x.mean() for x in losses]
-            losses = reduce(lambda x,y : x + y, losses ) / X.shape[0]
-            loss_list.append( losses.copyto(mx.cpu()).asnumpy()[0] )
-            #pdb.set_trace()
-            tmpacc /= len(ypred)
-            acc += tmpacc.copyto(mx.cpu())
-            #acc += nd.sum(net(X).argmax(axis=1)==y).copyto(mx.cpu())
-            #n += y.size
-            n += X.shape[0]
-        acc.wait_to_read() # don't push too many operators into backend
-    return acc.asscalar() / n, np.asarray(loss_list).mean()
+class LOSS_TRACE(object):
+    def __init__(self,name):
+        self.loss_list = []
+        self.name = name
+    def update(self,loss):
+        if isinstance(loss, mx.nd.NDArray):
+            loss = loss.as_in_context(mx.cpu()).asnumpy()
+        self.loss_list.append( loss.mean() )
+        return
+    def reset(self):
+        self.loss_list = []
+    def get(self):
+        loss_mean = np.hstack(self.loss_list).mean()
+        return '{}:{:.5f}'.format(self.name, loss_mean)
 
-def save_checkpoints(cpdir,net, trainer,epoch):
-    net.save_params('%s/iter-%.6d.params'%(cpdir,epoch)) #with load_params() may regain most weight() but not all????
-    #net.collect_params().save("yyy-%.4d.params"%i)
-    #trainer.save_states('epoch-%.6d.state'%epoch) #load_params() error with kv_store???
-    #trainer.load_states('zzz.state')
-            
-def train(train_data, test_data, net, loss, trainer, ctx, num_epochs, lr_steps,print_batches=None, cpdir=None):
-    if cpdir is not None:
-        try:
-            os.makedirs(cpdir)
-        except Exception,e:
-            print e.message
-    train_loss_hist = []
-    test_loss_hist = []
+
+class ACC_TRACE(object):
+    def __init__(self,name):
+        self.name = name
+        self.hit_list = []
+    def reset(self):
+        self.hit_list = []
+        return
+    def update(self,preds,labels):
+        if isinstance(preds,mx.nd.NDArray):
+            preds = preds.as_in_context(mx.cpu()).asnumpy()
+        if isinstance(labels,mx.nd.NDArray):
+            labels = labels.as_in_context(mx.cpu()).asnumpy()
+        pred_labels = []
+        for idx in range(labels.shape[1]):
+            pred = preds[:,idx*26:(idx+1)*26]
+            pred_label = np.argmax(pred,axis=1)
+            pred_label = np.reshape( pred_label, (-1,1) )
+            pred_labels.append(pred_label)
+        pred_labels =  np.hstack(pred_labels)
+        for pred_label, label in zip(pred_labels, labels):
+            hit_num = (pred_label == label).sum()
+            if hit_num == pred_labels.shape[1]:
+                self.hit_list.append(1.0)
+            else:
+                self.hit_list.append(0.0)
+        return
+    def get(self):
+        acc = np.mean(self.hit_list)
+        ret = '{}:{:.3f}'.format(self.name, acc)
+        return ret
+
+def train(train_data, test_data, net, loss_func, trainer, ctx, num_epoch, print_step, lr_sch):
     """Train a network"""
+    if print_step < 1:
+        print_step = 1
     logging.info("Start training on %s"%ctx)
-    if isinstance(ctx, mx.Context):
-        ctx = [ctx]
+    loss_trace = LOSS_TRACE("loss")
+    acc_trace = ACC_TRACE("acc")
     iter = 0
-    for epoch in range(num_epochs):
-        train_loss, train_acc, n, m = 0.0, 0.0, 0.0, 0.0
-        if isinstance(train_data, mx.io.MXDataIter) or isinstance(train_data,mx.image.ImageIter):
-            train_data.reset()
-        
-        start = time()
-        for i, batch in enumerate(train_data):
+    for epoch in range(num_epoch):
+        loss_trace.reset()
+        acc_trace.reset()
+        for batch in train_data:
             iter += 1
-            
-            if iter in set(lr_steps):
-                trainer.set_learning_rate( trainer.learning_rate * 0.1 )
-            
-            data, label, batch_size = _get_batch(batch, ctx)  
-            #pdb.set_trace()
-            #batch_size = batch.shape[0]
-            losses = []
+            trainer.set_learning_rate( lr_sch(iter) )
+            data,labels = batch
+            data = data.as_in_context(ctx)
+            labels = labels.as_in_context(ctx)
+            loss = []
             with autograd.record():
-                outputs = [net(X) for X in data]
-                #pdb.set_trace()
-                for k, yhat in enumerate(outputs[0]):
-                    losses.append( loss( yhat, label[0][:,k] ) )
-                losses = [ x.mean() for x in losses]
-                #pdb.set_trace()
-                losses = reduce(lambda x,y : x + y, losses )
-                losses.backward()
-            #for l in losses:
-            #    l.backward()
-            #pdb.set_trace()
-            acc = 0
-            for k, yhat in enumerate(outputs[0]):
-                acc += (yhat.argmax(axis=1) == label[0][:,k]).sum().asscalar()
-            train_acc += acc / (len(outputs[0]))
-            #yhat = outputs[0].argmax(axis=1)
-            #for k in range(len(yhat)):
-            #    if label[0][k,yhat[k]] > 0.5:
-            #        train_acc += 1
-            #pdb.set_trace()
-            train_loss += sum([l.sum().asscalar() for l in losses])
-            
-            trainer.step(batch_size)
-            n += batch_size
-            m += sum([y.size for y in label])
-            
-            train_loss_hist.append((iter, train_loss/n))
-            if print_batches and (i+1) % print_batches == 0:
-                logging.info("Iter %d lr %f Batch %d. Loss: %f, Train acc %f" % ( iter, trainer.learning_rate,
-                    n, train_loss/n, train_acc/m
-                ))
-        test_acc,test_loss = evaluate_accuracy(test_data, net, loss, ctx)
-        test_loss_hist.append( (iter, test_loss) )
-        with open( os.path.join(cpdir,'loss.pkl'), "wb") as f:
-            cPickle.dump((train_loss_hist, test_loss_hist, []),f)
-        logging.info("Iter %d lr %f Epoch %d. Test Loss: %f, Train acc %f, Test acc %f, Time %.1f sec" % ( iter, trainer.learning_rate
-           , epoch, test_loss, train_acc/m, test_acc, time() - start
-        ))
-        if cpdir is not None:
-            save_checkpoints(cpdir,net,trainer,iter)
+                preds = net(data)
+                for idx in range(labels.shape[1]):
+                   y0 = labels[:,idx]
+                   y = preds[:,idx*26:(idx+1)*26]
+                   loss.append( np.reshape(loss_func(y,y0),(-1,1) ) )
+                loss = nd.concat(*loss,dim=1).mean(axis=1)
+                loss.sum().backward()
+            trainer.step(data.shape[0])
+            nd.waitall()
+            loss_trace.update(loss)
+            acc_trace.update(preds = preds, labels = labels)
+            if iter % print_step == 0:
+                logging.info("train epoch:{} update:{} lr:{} {} {}".format( epoch, iter,trainer.learning_rate,loss_trace.get(),acc_trace.get()))
 
+        loss_trace.reset()
+        acc_trace.reset()
+        for batch in test_data:
+            data,labels = batch
+            data = data.as_in_context(ctx)
+            labels = labels.as_in_context(ctx)
+            preds = net(data)
+            loss = []
+            for idx in range(labels.shape[1]):
+                y0 = labels[:, idx]
+                y = preds[:, idx * 26:(idx + 1) * 26]
+                loss.append(np.reshape(loss_func(y, y0), (-1, 1)))
+            loss = nd.concat(*loss, dim=1).mean(axis=1)
+            acc_trace.update(preds,labels)
+            loss_trace.update(loss)
+        logging.info("test epoch:{} {} {}".format(epoch,loss_trace.get(), acc_trace.get() ))
+        if not os.path.exists("models"):
+            os.makedirs('models')
+        net.save_params(os.path.join('models',"epoch_{:0>8d}.params".format(epoch)))
+    return
 class Residual(nn.HybridBlock):
     def __init__(self, channels, same_shape=True, **kwargs):
         super(Residual, self).__init__(**kwargs)

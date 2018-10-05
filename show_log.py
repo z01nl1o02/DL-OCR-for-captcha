@@ -55,7 +55,6 @@ def show_log(filepath):
     fig.savefig("train-test-loss.png")
 
 
-
 if __name__ == "__main__":
     show_log(sys.argv[1])
 
